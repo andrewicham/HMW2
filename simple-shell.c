@@ -14,9 +14,19 @@
 
 
 #define MAX_LINE		80 /* 80 chars per line, per command */
-#define HIST_COUNT		100
+#define HIST_COUNT		10
+char historyArray[HIST_COUNT][MAX_LINE];
 
-
+//this function checks if the command entered is exit
+int checkExit(char *inputBuff){
+	if(strcmp(inputBuff, "exit")==0){ //compare shell input with "exit"
+		printf("returning 1(exit)");		
+		return 1;
+	}
+	else{
+		return 0;
+	}
+}
 //this function splits the inputBuff into tokens and stores into args array
 int splitToken(char* inputBuff, char** args)
 {
@@ -52,7 +62,7 @@ int checkHasAmpAndModify(char **args)
 }
 
 //this function checks to see if inputBuff has !! or !N to decide on history feature
-int stringCompare(char *inputBuff){
+char* stringCompare(int historyCount, char *inputBuff){
 	int slen;	
 	slen = strlen(inputBuff);
 	printf("slen: %d\n",slen);
@@ -65,46 +75,39 @@ int stringCompare(char *inputBuff){
 		printf("ascii + 1: %d\n", asciiPlusOne);
 		if(ascii == 33 && asciiPlusOne == 33 && slen<3)//ascii for ! is 33
 		{
-			return 2;
+			return historyArray[historyCount];
 		}
 		else if(temp[i] == '!' && asciiPlusOne > 47 && asciiPlusOne < 57 && slen<3){//all ascii int values are between 48 and 57
-			return 1;
+			return historyArray[(int)asciiPlusOne];
 		}
-	return 0; //will return 0 if the string does not contain !! or !N
+	return inputBuff; //will return 0 if the string does not contain !! or !N
 	}
 }
 
-void history()
+void history(int historyCount, char *inputBuff)
 {
-	printf("history: \n");
+	if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
+		int i = 0;			
+		while(i < historyCount){
+			printf("%d %s\n",(i+1),historyArray[i]);
+			i++;
+		}
+	}	
 	
 }
 
-int addToHistory(char **historyArray, int historyCount, char *inputBuff)
+int addToHistory(int historyCount, char *inputBuff)
 {	
 	int slen;
-	int* temp;
-	temp = NULL;
-	temp = (char *)malloc(sizeof(temp));
-	strcpy(temp, inputBuff);
-	
+	printf("%s",inputBuff);
 	if(historyCount < HIST_COUNT){
 		printf("about to copy\n");
 		slen = strlen(inputBuff);
 		printf("slen of inputBuff: %d\n", slen);
-		strcpy(historyArray[historyCount], temp);
-		
+		strcpy(historyArray[historyCount], inputBuff);
 		printf("historyCount: %d\n", historyCount);
 		historyCount++;
 	}	
-	printf("made it here");
-	int j;
-	for(j=0; j<historyCount; j++)
-	{	
-		printf("History array index: %d\n", historyCount);
-		printf("history array values: %s\n", historyArray[j]);
-	}
-	free(temp);
 	return historyCount;
 }
 
@@ -118,7 +121,6 @@ int main(void)
 	pid_t pid;
 	int flag;
 	int stringCompareInt;
-	char *historyArray[HIST_COUNT] = {0};
 	int historyCount = 0; //	
 	int tokenCount; //to see how many tokens are in args array
 
@@ -126,20 +128,35 @@ int main(void)
         printf("\nosh>");
         fflush(stdout); //this allows the buffer to be flushed so you do not need a new line
 
-	fgets(inputBuff, MAX_LINE, stdin);//get user input
+	fgets(inputBuff, MAX_LINE, stdin); //get user input
 	
-	stringCompareInt = stringCompare(inputBuff);
+	size_t length = strlen(inputBuff); //length of input
+	if(inputBuff[length-1] == '\n'){ //replaces endline char with null terminating 0
+		inputBuff[length-1] = '\0';
+	}
+	if(checkExit(inputBuff) == 1){ //check if input is command is "exit"
+		printf(" exiting\n");
+		exit(0);
+		should_run = 0;
+	}
+	history(historyCount, inputBuff);
+	historyCount = addToHistory(historyCount, inputBuff);
+	strcpy(inputBuff, stringCompare(historyCount, inputBuff));
+
 	
 	//returns an int, the value of which depends on characters in inputBuff
-	printf("stringCompareInt: %d\n", stringCompareInt);
-	if(stringCompareInt == 1 || stringCompareInt == 2){ //if inputBuff contains !! or !N
-		history(stringCompareInt);
-	}
-	
-	else if(stringCompareInt == 0){ //if inputBuff contains a command
+
 		
-		historyCount = addToHistory(&historyArray[HIST_COUNT-1], historyCount, inputBuff);
+
 		
+		
+		
+		int j;
+		for(j=0; j<historyCount; j++){	
+			printf("History array index: %d\n", j);
+			printf("history array values: %s\n", historyArray[j]);
+
+
 		tokenCount = splitToken(inputBuff, args);
 	
 		flag = checkHasAmpAndModify((&args[tokenCount-1]));
