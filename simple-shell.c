@@ -14,21 +14,12 @@
 
 
 #define MAX_LINE		80 /* 80 chars per line, per command */
-#define HIST_COUNT		100
+#define HIST_COUNT		10
 
 char historyArray[HIST_COUNT][MAX_LINE];
 int historyCount;
 
-//this function checks if the command entered is exit
-int checkExit(char *inputBuff){
-	if(strcmp(inputBuff, "exit")==0){ //compare shell input with "exit"
-		printf("returning 1(exit)");		
-		return 1;
-	}
-	else{
-		return 0;
-	}
-}
+
 //this function splits the inputBuff into tokens and stores into args array
 int splitToken(char* inputBuff, char** args)
 {
@@ -64,25 +55,23 @@ int checkHasAmpAndModify(char **args)
 }
 
 //this function checks to see if inputBuff has !! or !N to decide on history feature
-char* convertExToCmd(int historyCount, char *inputBuff){
-	int slen;	
-	slen = strlen(inputBuff);
+char* convertExToCmd(int historyCount, char *inputBuff){	
+	int slen = strlen(inputBuff);
 	int i; 
-	char *temp = inputBuff;
 	for(i = 0; i < slen; i++){
-		int ascii = temp[i];//cast the array member into an ascii int
-		int asciiPlusOne = temp[i+1];
-		int asciiPlusTwo = temp[i+2];
+		int asciiOne = inputBuff[i];//cast the array member into an ascii int
+		int asciiTwo = inputBuff[i+1];
+		int asciiThree = inputBuff[i+2];
 		
-		if(ascii == 33 && asciiPlusOne == 33 && slen<3)//ascii for ! is 33
+		if(asciiOne == 33 && asciiTwo == 33 && slen<3)//ascii for ! is 33
 		{	
 			return historyArray[historyCount];
 		}
-		else if(temp[i] == '!' && asciiPlusOne > 48 && asciiPlusOne < 58 && slen<3){//all ascii int values are between 48 and 57
-			int index = asciiPlusOne - 49;
+		else if(asciiOne == 33 && asciiTwo > 48 && asciiTwo < 58 && slen<3){//all ascii int values are between 48 and 57
+			int index = asciiTwo - 49;
 			return historyArray[index];
 		}
-		else if(temp[i] == '!' && asciiPlusOne == 49 && asciiPlusTwo == 48 && slen<4){ //special case for !10; 1 is ascii of 49, 0 is 48;
+		else if(asciiOne == 33 && asciiTwo == 49 && asciiThree == 48 && slen<4){ //special case for !10; 1 is ascii of 49, 0 is 48;
 			int index = 9;
 			return historyArray[index];
 		}
@@ -91,20 +80,25 @@ char* convertExToCmd(int historyCount, char *inputBuff){
 	return NULL; //will return NULL if the string does not contain !! or !N
 }
 
-void history(int historyCount, char *inputBuff)
+int checkcustomCommands(char *inputBuff)
 {
 	if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
-		int i = 0;			
-		while(i < HIST_COUNT){
-			printf("%d %s\n",(i+1),historyArray[i]);
-			i++;
-		}
+		return 1;		
 	}
+
+	else if(strcmp(inputBuff, "exit")==0){ //compare shell input with "exit"
+		printf("returning 2(exit)");		
+		return 2;
+	}
+	else{
+		return 0;
+	}
+	
 }
 
 int addToHistory(int historyCount, char *inputBuff)
 {	
-	historyCount = (historyCount) % HIST_COUNT; //makes this a circular array
+	historyCount = (historyCount % 10); //makes this a circular array
 	strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
 	historyCount++;
 	return historyCount;
@@ -134,10 +128,18 @@ int main(void)
 			inputBuff[length-1] = '\0';
 		}
 
-		if(checkExit(inputBuff) == 1){ //check if inputcommand is "exit"
+		int commandNumber = checkcustomCommands(inputBuff);
+		if(commandNumber == 1){ //"history" command
+			int i = 0;			
+			while(i < HIST_COUNT){
+				printf("%d %s\n",(i+1),historyArray[i]);
+				i++;
+			}
+		}		
+		if(commandNumber == 2){ //"exit" command
 			printf(" exiting\n");
-			exit(0);
 			should_run = 0;
+			exit(0);
 		}
 		
 		char* tmp = convertExToCmd(historyCount, inputBuff);//calls function to see if input has !! or !N
@@ -145,7 +147,6 @@ int main(void)
 			strncpy(inputBuff, tmp, MAX_LINE);//will copy the old history command into inputBuff
 		}
 		historyCount = addToHistory(historyCount, inputBuff);
-		history(historyCount, inputBuff);
 
 	//returns an int, the value of which depends on characters in inputBuff
 		tokenCount = splitToken(inputBuff, args);
