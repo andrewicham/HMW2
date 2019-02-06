@@ -18,6 +18,7 @@
 
 char historyArray[HIST_COUNT][MAX_LINE];
 int historyCount;
+int arrayLength; //this keeps track of how long the array is so that you do not go out of bounds
 
 
 //this function splits the inputBuff into tokens and stores into args array
@@ -98,9 +99,26 @@ int checkcustomCommands(char *inputBuff)
 
 int addToHistory(int historyCount, char *inputBuff)
 {	
-	historyCount = (historyCount % 10); //makes this a circular array
+	
+	if(historyCount < HIST_COUNT-1){
+		historyCount = (historyCount % 10); //makes this a circular array, and so that historyCount is always between 0 and 9
+		strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
+		printf("DEBUG: HISTORYCOUNT %d\n", historyCount);
+		historyCount++;
+		arrayLength++;//while historyCount < 9, increments the array length
+
+	}
+	else if(arrayLength == HIST_COUNT-1){ //will copy to array if arraylength equals to 9
+		strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
+		arrayLength++; 
+	}
+	else if(arrayLength == HIST_COUNT){ //the final case for when arraylength equals 10, which it will for the rest of execution
+		int i;
+		for(int i = 1; i < HIST_COUNT; i++){
+			strncpy(historyArray[i-1], historyArray[i], MAX_LINE);//copies all array positions left to make room for new array postion 10
+		}
 	strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
-	historyCount++;
+	}
 	return historyCount;
 }
 
@@ -115,7 +133,9 @@ int main(void)
 	int flag;
 	int stringCompareInt;
 	int tokenCount; //to see how many tokens are in args array
+	strncpy(historyArray[HIST_COUNT-1], "", MAX_LINE);
 	historyCount = 0;
+	arrayLength = 0;
 
     while(should_run){   
         printf("osh>");
@@ -129,25 +149,25 @@ int main(void)
 		}
 
 		int commandNumber = checkcustomCommands(inputBuff);
+				
+		if(commandNumber == 2){ //"exit" command
+			printf(" exiting\n");
+			should_run = 0;
+			exit(0);
+		}
 		if(commandNumber == 1){ //"history" command
 			int i = 0;			
 			while(i < HIST_COUNT){
 				printf("%d %s\n",(i+1),historyArray[i]);
 				i++;
 			}
-		}		
-		if(commandNumber == 2){ //"exit" command
-			printf(" exiting\n");
-			should_run = 0;
-			exit(0);
 		}
-		
 		char* tmp = convertExToCmd(historyCount, inputBuff);//calls function to see if input has !! or !N
 		if(tmp != NULL){
 			strncpy(inputBuff, tmp, MAX_LINE);//will copy the old history command into inputBuff
 		}
 		historyCount = addToHistory(historyCount, inputBuff);
-
+		
 	//returns an int, the value of which depends on characters in inputBuff
 		tokenCount = splitToken(inputBuff, args);
 	
