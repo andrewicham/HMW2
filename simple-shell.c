@@ -14,7 +14,7 @@
 
 
 #define MAX_LINE		80 /* 80 chars per line, per command */
-#define HIST_COUNT		10
+#define HIST_COUNT		100
 
 char historyArray[HIST_COUNT][MAX_LINE];
 int historyCount;
@@ -74,13 +74,11 @@ char* convertExToCmd(int historyCount, char *inputBuff){
 		int asciiPlusOne = temp[i+1];
 		int asciiPlusTwo = temp[i+2];
 		
-		//printf("ascii: %d\n", ascii);
-		//printf("ascii + 1: %d\n", asciiPlusOne);
 		if(ascii == 33 && asciiPlusOne == 33 && slen<3)//ascii for ! is 33
 		{	
 			return historyArray[historyCount];
 		}
-		else if(temp[i] == '!' && asciiPlusOne > 47 && asciiPlusOne < 57 && slen<3){//all ascii int values are between 48 and 57
+		else if(temp[i] == '!' && asciiPlusOne > 48 && asciiPlusOne < 58 && slen<3){//all ascii int values are between 48 and 57
 			int index = asciiPlusOne - 49;
 			return historyArray[index];
 		}
@@ -95,24 +93,20 @@ char* convertExToCmd(int historyCount, char *inputBuff){
 
 void history(int historyCount, char *inputBuff)
 {
-	/*if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
+	if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
 		int i = 0;			
-		while(i < historyCount){
+		while(i < HIST_COUNT){
 			printf("%d %s\n",(i+1),historyArray[i]);
 			i++;
 		}
-	}*/	
-	int i;
-	for(i = 0; i < HIST_COUNT; i++){
-		printf("History at %d %s\n", i, historyArray[i]);
 	}
 }
 
 int addToHistory(int historyCount, char *inputBuff)
 {	
-	historyCount = (historyCount + 1) % HIST_COUNT; //makes this a circular array
-	printf("DEBUG: historyCount: %d\n", historyCount);
+	historyCount = (historyCount) % HIST_COUNT; //makes this a circular array
 	strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
+	historyCount++;
 	return historyCount;
 }
 
@@ -145,14 +139,13 @@ int main(void)
 			exit(0);
 			should_run = 0;
 		}
-
-		history(historyCount, inputBuff);
 		
 		char* tmp = convertExToCmd(historyCount, inputBuff);//calls function to see if input has !! or !N
 		if(tmp != NULL){
 			strncpy(inputBuff, tmp, MAX_LINE);//will copy the old history command into inputBuff
 		}
 		historyCount = addToHistory(historyCount, inputBuff);
+		history(historyCount, inputBuff);
 
 	//returns an int, the value of which depends on characters in inputBuff
 		tokenCount = splitToken(inputBuff, args);
