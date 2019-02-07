@@ -14,30 +14,27 @@
 
 
 #define MAX_LINE		80 /* 80 chars per line, per command */
-#define HIST_COUNT		10
+#define HIST_COUNT		10 /* 10 commands max in history*/
 
-char historyArray[HIST_COUNT][MAX_LINE];
-int historyCount;
-int arrayLength; //this keeps track of how long the array is so that you do not go out of bounds
+char historyArray[HIST_COUNT][MAX_LINE]; //global array of command history
+int historyCount; //tracks amount of commands executed
+int arrayLength; //tracks size of the historyArray[]
 
 
 //this function splits the inputBuff into tokens and stores into args array
 void splitToken(char* inputBuff, char** args)
 {
 	char *token;
-	//char *buffCpy;
-	//printf("%s\n", inputBuff);
-	int i = 0; //used for placing args into args array
+	int i = 0;
 	int tokenCount = 0;
-	//strcpy(buffCpy, inputBuff);
-	token = strtok(inputBuff," \n"); //splits tokens at space, tab, carriage return, new line
+	token = strtok(inputBuff," \n"); //splits tokens at new line
 	while(token != NULL) //stops at terminating \0
 	{
-		args[i++] = token;
+		args[i++] = token; //inserts argument split by space into an index in args[]
 		token = strtok(NULL, " \n");
 		tokenCount++;
 	}
-	args[i] = NULL;
+	args[i] = NULL; //last argument is NULL termination
 }
 //this function checks to see if each character in an arg is &, and if it is, returns 1
 int checkHasAmpAndModify(char **args, size_t length)
@@ -59,23 +56,23 @@ int checkHasAmpAndModify(char **args, size_t length)
 
 //this function checks to see if inputBuff has !! or !N to decide on history feature
 char* historyExeCmd(int historyCount, char *inputBuff){		
-	int slen = strlen(inputBuff);
+	int slen = strlen(inputBuff); //find length of inputBuff
 	int i = 0;
-	int asciiArray[slen];
+	int asciiArray[slen]; //array for ascii values of history feature command
 	memset(asciiArray, 0, slen*sizeof(int));
-	int asciiValue = inputBuff[i];
-	if(asciiValue == 33){	
-		for(i = 0; i < slen; i++){
-			asciiValue = (int)inputBuff[i];
+	int asciiValue = inputBuff[i]; //is the first character a (!), if not we can save time and return null
+	if(asciiValue == 33 && slen > 1){	
+		for(i = 0; i < slen; i++){ //loop to fill asciiArray with values from command
+			asciiValue = (int)inputBuff[i]; //cast char to int(ascii)
 			if(asciiValue == 33 || (asciiValue > 48 && asciiValue < 58)){
-				asciiArray[i] = asciiValue;//cast the array member into an ascii int
+				asciiArray[i] = asciiValue;
 			}
 			else{ 
 				printf("Invalid history command\n");
 				exit(0);			
 			}
 		}
-		if(asciiArray[0] == 33 && asciiArray[1] == 33 && slen<3){ //!!
+		if(asciiArray[0] == 33 && asciiArray[1] == 33 && slen<3){ // (!!) command
 			if(historyCount > 0){			
 				printf("osh>%s\n", historyArray[arrayLength-1]);
 				return historyArray[arrayLength-1];
@@ -85,12 +82,12 @@ char* historyExeCmd(int historyCount, char *inputBuff){
 				exit(0);
 			}
 		}
-		else{
-			memmove(inputBuff, inputBuff+1,strlen(inputBuff));
-			int x = atoi(inputBuff);
+		else{ //(!N) command
+			memmove(inputBuff, inputBuff+1,strlen(inputBuff)); //remove first !
+			int x = atoi(inputBuff); //cast char number to int
 			if(x <= historyCount && x >= (historyCount-9) && x > 0 && historyCount > 0){
 				if (historyCount > 10){
-					int index = (x-(historyCount - 9));
+					int index = (x-(historyCount - 9)); //finds index when more than 10 commands have been entered
 					printf("osh>%s\n", historyArray[index]);
 					return historyArray[index];
 				}
@@ -111,6 +108,7 @@ char* historyExeCmd(int historyCount, char *inputBuff){
 	return NULL; //will return NULL if the string does not contain !! or !N
 }
 
+//this function checks if the command is a custom supported command and returns a status
 int checkCustomCmd(char *inputBuff)
 {
 	if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
@@ -124,32 +122,33 @@ int checkCustomCmd(char *inputBuff)
 	}
 }
 
+//this function adds the current command to history and manages historyArray[]
 void addToHistory(char *inputBuff)
 {	
-	historyCount++;
+	historyCount++; //increase historyCount every time function is called
 	if(historyCount <= HIST_COUNT){
-		//historyCount = (historyCount % 10); //makes this a circular array, and so that historyCount is always between 0 and 9
-		strncpy(historyArray[historyCount-1], inputBuff, MAX_LINE);
-		arrayLength++;//while historyCount < 9, increments the array length
+		strncpy(historyArray[historyCount-1], inputBuff, MAX_LINE); //copy current command into historyArray[]
+		arrayLength++; //while historyCount < 10, increments the array length
 
 	}
-	else if(historyCount > HIST_COUNT){ //will copy to array if arraylength equals to 9
+	else if(historyCount > HIST_COUNT){ //if more than 10 commands have been entered...
 		int i;
 		for(i = 1; i < HIST_COUNT; i++){
-			strncpy(historyArray[i-1], historyArray[i], MAX_LINE);//copies all array positions left to make room for new array postion 10
+			strncpy(historyArray[i-1], historyArray[i], MAX_LINE); //copies all array positions down to make room for new array index 9
 		}
-		strncpy(historyArray[9], inputBuff, MAX_LINE);
+		strncpy(historyArray[9], inputBuff, MAX_LINE); //copy current command into max historyArray index 9
 	}
 }
 
+//this function executes a custom supported command
 void execCustomCmd(char* inputBuff, int* should_run, int commandStatus){
 	pid_t pid = fork();
 	if(pid < 0){
 		printf("fork error occured\n");
 		exit(0);
 	}
-	else if(pid == 0){		
-		if (commandStatus == 1){
+	else if(pid == 0){ //successful fork		
+		if (commandStatus == 1){ //custom "history" command
 			int i = 0;
 			int j;
 			if (historyCount > 10){
@@ -157,114 +156,107 @@ void execCustomCmd(char* inputBuff, int* should_run, int commandStatus){
 			}else{ j = 1; }
 
 			while(i < HIST_COUNT){
-				printf("%d %s\n",(j),historyArray[i]);
+				printf("%d %s\n",(j),historyArray[i]); //print most recent 10 commands from hsitoryArray[] 
 				j++;
 				i++;
 			}
 		}
-		else if(commandStatus == 2){
+		else if(commandStatus == 2){ //custom "exit" command
 			printf(" exiting\n");
 			should_run = 0;
 		}
 		exit(0);
 	}
-	else{
-		//printf("waiting child\n");			
-		wait(NULL);
-		//printf("child complete\n");
+	else{	
+		wait(NULL); //child invoke wait
 	}
 }
 
+//this function executes a normal non-pipe command
 void execArgs(char** args, int flag, char* inputBuff){
 	pid_t pid = fork();
 	if(pid < 0){
 		printf("fork error occured\n");
 		exit(0);
 	}
-	else if(pid == 0){
-		splitToken(inputBuff, args);		
-		if (execvp(args[0], args) < 0){
+	else if(pid == 0){ //successful fork
+		splitToken(inputBuff, args); //fills args[] array with commands from inputBuff		
+		if (execvp(args[0], args) < 0){ //executes command(s) and checks for return error 
 			printf("command error occured\n");
 		} 
 		exit(0);
 	}
 	else{
-		if(flag == 0){
-			//printf("waiting child\n");			
-			wait(NULL);
-			//printf("child complete\n");
+		if(flag == 0){			
+			wait(NULL); //child invoke wait
 		}
 	}
 }
 
-int checkPipe(char* inputBuff, char** strPiped){
-	    
+//this function checks if inputBuff contains a pipe
+int checkPipe(char* inputBuff, char** strPiped){    
 	int i; 
-    for (i = 0; i < 2; i++) { 
-        strPiped[i] = strsep(&inputBuff, "|"); //seperates 2 strings by pipe |
-        if (strPiped[i] == NULL) 
-            break; 
-    } 
-  
-    if (strPiped[1] == NULL) 
-        return 0; // returns 0 if no pipe is found
-    else { 
-        return 1; // returns 1 if pipe is found
-    }
+    	for (i = 0; i < 2; i++) { 
+        	strPiped[i] = strsep(&inputBuff, "|"); //seperates 2 strings by pipe |
+        	if (strPiped[i] == NULL) 
+           	break; 
+    	} 
+    	if (strPiped[1] == NULL){
+        	return 0; // returns 0 if no pipe is found
+	}
+    	else { 
+        	return 1; // returns 1 if pipe is found
+    	}
 }
 
+//this function executes a pipe command
 void execArgsPiped(char** args, char** argsPiped, char* inputBuff, char** strPiped) 
 {
-    int pipefd[2];  
-    pid_t pid1;
+    	int pipefd[2]; //read and write  
+    	pid_t pid1;
 	pid_t pid2;
   
-    if (pipe(pipefd) < 0){ 
-        printf("pipe construction error\n"); 
+    	if (pipe(pipefd) < 0){ //create proccess pipe and check for return error
+        	printf("pipe construction error\n"); 
         return; 
-    } 
-    pid1 = fork(); 
-    if (pid1 < 0){ 
-        printf("fork error occured\n"); 
-        return; 
-    } 
+    	} 
+    	pid1 = fork(); 
+    	if (pid1 < 0){ 
+        	printf("fork error occured\n"); 
+        	return; 
+    	} 
 	//child 1 executes here
-    if (pid1 == 0){ //fork is complete 
-	splitToken(strPiped[0], args);
-        dup2(pipefd[1], STDOUT_FILENO); //duplicate output side pipe
-	close(pipefd[0]); //close read
+   	if (pid1 == 0){ //successful fork 
+		splitToken(strPiped[0], args); //fills args[] array with commands from left side of pipe
+       		dup2(pipefd[1], STDOUT_FILENO); //duplicate output side pipe
+		close(pipefd[0]); //close read
         
-        if (execvp(args[0], args) < 0){ 
+        if (execvp(args[0], args) < 0){ //executes command(s) and checks for return error 
             printf("command 1 execution error\n"); 
             exit(0); 
         } 
-    } else {
+    	} else {
 
         pid2 = fork(); 
         if (pid2 < 0){ 
             printf("fork error occured\n"); 
             return; 
         } 
-		//child 2 executes here 
-        if (pid2 == 0){ //fork is completed
-		splitToken(strPiped[1], argsPiped);
+	//child 2 executes here 
+        if (pid2 == 0){ //successful fork
+		splitToken(strPiped[1], argsPiped); //fills argsPiped[] array with commands from right side of pipe
             	dup2(pipefd[0], STDIN_FILENO); //duplicate input side pipe
 		close(pipefd[1]); //close write
 
-            if (execvp(argsPiped[0], argsPiped) < 0){ 
-                printf("command 2 execution error\n"); 
-                exit(0); 
+           	if (execvp(argsPiped[0], argsPiped) < 0){ //executes command(s) and checks for return error 
+                	printf("command 2 execution error\n"); 
+                	exit(0); 
             }
         }  
 		close(pipefd[0]); //close read
 		close(pipefd[1]); //close write
-		//printf("Waiting child 1\n");
             	wait(NULL);
-		//printf("Child 1 complete\n");
-		//printf("Waiting child 2\n");
             	wait(NULL); 
-		//printf("Child 2 complete\n");
-
     } 
 }
 
@@ -291,41 +283,30 @@ int main(void)
 
 		fgets(inputBuff, MAX_LINE, stdin); //get user input	
 
-		size_t length = strlen(inputBuff); //length of input
+		size_t length = strlen(inputBuff);
 		if(inputBuff[length-1] == '\n'){ //replaces endline char with null terminating 0
 			inputBuff[length-1] = '\0';
 		}
-		char* historyCmd = historyExeCmd(historyCount, inputBuff);
+		char* historyCmd = historyExeCmd(historyCount, inputBuff); //is input a !! or !N
 		if(historyCmd != NULL){
-			strncpy(inputBuff, historyCmd, MAX_LINE);//will copy the old history command into inputBuff
+			strncpy(inputBuff, historyCmd, MAX_LINE); //copy the history command into inputBuff
 		}
-		addToHistory(inputBuff);
+		addToHistory(inputBuff); //add the current inputBuff to historyArray[]
 		pipeStatus = checkPipe(inputBuff,strPiped); //0 is no pipe, 1 has pipe
-		//printf("%i", pipeStatus);
 		commandStatus = checkCustomCmd(inputBuff); //0 default command; 1 history; 2 exit
-		//printf("%i", commandStatus);
-		//printf("%s", inputBuff);
 		if(commandStatus == 1 || commandStatus == 2){ //execute custom command			
 			execCustomCmd(inputBuff, &should_run, commandStatus);
 		}
 		else if(commandStatus == 0){ //command is not custom
 			if(pipeStatus == 0){ //standard command(no pipe)
-				//splitToken(inputBuff, args);
 				//flag = checkHasAmpAndModify((&args[tokenCount-1]), length);
-				//printf("flag: %d\n", flag);
 				execArgs(args, flag, inputBuff); //standard execution
 			}
 			else if(pipeStatus == 1){ //piped command
-				//splitToken(strPiped[0], args);
-				//splitToken(strPiped[1], argsPiped);
 				//flag = checkHasAmpAndModify((&args[tokenCount-1]), length);
-				//printf("flag: %d\n", flag);
 				execArgsPiped(args, argsPiped, inputBuff, strPiped); //piped execution
 			}
-		}
-
-		
-		
+		}		
 	//returns an int, the value of which depends on characters in inputBuff
 		
 	
