@@ -22,7 +22,7 @@ int arrayLength; //this keeps track of how long the array is so that you do not 
 
 
 //this function splits the inputBuff into tokens and stores into args array
-int splitToken(char* inputBuff, char** args)
+void splitToken(char* inputBuff, char** args)
 {
 	char *token;
 	int i = 0; //used for placing args into args array
@@ -35,7 +35,6 @@ int splitToken(char* inputBuff, char** args)
 		tokenCount++;
 	}
 	args[i] = NULL;
-	return tokenCount;
 }
 //this function checks to see if each character in an arg is &, and if it is, returns 1
 int checkHasAmpAndModify(char **args)
@@ -56,7 +55,7 @@ int checkHasAmpAndModify(char **args)
 }
 
 //this function checks to see if inputBuff has !! or !N to decide on history feature
-char* convertExToCmd(int historyCount, char *inputBuff){	
+char* historyExeCmd(int historyCount, char *inputBuff){	
 	int slen = strlen(inputBuff);
 	int i; 
 	for(i = 0; i < slen; i++){
@@ -66,14 +65,17 @@ char* convertExToCmd(int historyCount, char *inputBuff){
 		
 		if(asciiOne == 33 && asciiTwo == 33 && slen<3)//ascii for ! is 33
 		{	
-			return historyArray[historyCount];
+			printf("osh>%s\n", historyArray[historyCount-1]);		
+			return historyArray[historyCount-1];
 		}
 		else if(asciiOne == 33 && asciiTwo > 48 && asciiTwo < 58 && slen<3){//all ascii int values are between 48 and 57
 			int index = asciiTwo - 49;
+			printf("osh>%s\n", historyArray[index]);
 			return historyArray[index];
 		}
 		else if(asciiOne == 33 && asciiTwo == 49 && asciiThree == 48 && slen<4){ //special case for !10; 1 is ascii of 49, 0 is 48;
 			int index = 9;
+			printf("osh>%s\n", historyArray[index]);
 			return historyArray[index];
 		}
 	
@@ -81,7 +83,7 @@ char* convertExToCmd(int historyCount, char *inputBuff){
 	return NULL; //will return NULL if the string does not contain !! or !N
 }
 
-int checkcustomCommands(char *inputBuff)
+int checkCustomCmd(char *inputBuff)
 {
 	if(strcmp(inputBuff, "history")==0){ //compare shell input with "history"
 		return 1;		
@@ -114,7 +116,7 @@ int addToHistory(int historyCount, char *inputBuff)
 	}
 	else if(arrayLength == HIST_COUNT){ //the final case for when arraylength equals 10, which it will for the rest of execution
 		int i;
-		for(int i = 1; i < HIST_COUNT; i++){
+		for(i = 1; i < HIST_COUNT; i++){
 			strncpy(historyArray[i-1], historyArray[i], MAX_LINE);//copies all array positions left to make room for new array postion 10
 		}
 	strncpy(historyArray[historyCount], inputBuff, MAX_LINE);
@@ -122,17 +124,109 @@ int addToHistory(int historyCount, char *inputBuff)
 	return historyCount;
 }
 
+void execArgs(char** args, int flag, char* inputBuff){
+	pid_t pid = fork();
+	if(pid < 0){
+		printf("fork error occured\n");
+		exit(0);
+	}
+	else if(pid == 0){
+		printf("fork success\n");		
+		if (execvp(args[0], args) < 0){
+			printf("command error occured\n");
+		} else{
+			historyCount = addToHistory(historyCount, inputBuff);
+		}
+		exit(0);
+	}
+	else{
+		if(flag == 0){
+			printf("waiting child\n");			
+			wait(NULL);
+			printf("child complete\n");
+		}
+	}
+}
+
+int checkPipe(char* inputBuff, char** strPiped){
+	    
+	int i; 
+    for (i = 0; i < 2; i++) { 
+        strPiped[i] = strsep(&inputBuff, "|"); //seperates 2 strings by pipe |
+        if (strPiped[i] == NULL) 
+            break; 
+    } 
+  
+    if (strPiped[1] == NULL) 
+        return 0; // returns 0 if no pipe is found
+    else { 
+        return 1; // returns 1 if pipe is found
+    }
+}
+
+void execArgsPiped(char** args, char** argsPiped, char* inputBuff) 
+{
+    int pipefd[2];  
+    pid_t p1, p2; 
+  
+    if (pipe(pipefd) < 0){ 
+        printf("pipe construction error\n"); 
+        return; 
+    } 
+    p1 = fork(); 
+    if (p1 < 0){ 
+        printf("fork error occured\n"); 
+        return; 
+    } 
+    if (p1 == 0){ //fork is complete
+        //child 1 executes here 
+        close(pipefd[0]); //close read
+        dup2(pipefd[1], STDOUT_FILENO); //duplicate output side pipe
+        close(pipefd[1]); //close write
+        if (execvp(args[0], args) < 0){ 
+            printf("command 1 execution error\n"); 
+            exit(0); 
+        } 
+    } else {
+
+        p2 = fork(); 
+        if (p2 < 0){ 
+            printf("fork error occured\n"); 
+            return; 
+        } 
+		//child 2 executes here 
+        if (p2 == 0){ //fork is completed
+            close(pipefd[1]); //close write
+            dup2(pipefd[0], STDIN_FILENO); //duplicate input side pipe
+            close(pipefd[0]); //close read
+            if (execvp(argsPiped[0], argsPiped) < 0){ 
+                printf("command 2 execution error\n"); 
+                exit(0); 
+            } else{
+				historyCount = addToHistory(historyCount, inputBuff);
+			}
+        } else {  
+			printf("Waiting child 1\n");
+            wait(NULL);
+			printf("Child 1 complete\n");
+			printf("Waiting child 2\n");
+            wait(NULL); 
+			printf("Child 2 complete\n");
+        } 
+    } 
+}
 
 int main(void)
 {
 	
 	char inputBuff[MAX_LINE]; 
-	char *args[MAX_LINE/2 + 1] = {0}; //declares it on the stack
+	char *args[MAX_LINE/2 + 1];
+	char *argsPiped[MAX_LINE/2 + 1];
     int should_run = 1;
-	pid_t pid;
-	int flag;
+	int flag = 0;
 	int stringCompareInt;
 	int tokenCount; //to see how many tokens are in args array
+	char* strPiped[2];
 	strncpy(historyArray[HIST_COUNT-1], "", MAX_LINE);
 	historyCount = 0;
 	arrayLength = 0;
@@ -148,50 +242,46 @@ int main(void)
 			inputBuff[length-1] = '\0';
 		}
 
-		int commandNumber = checkcustomCommands(inputBuff);
-				
-		if(commandNumber == 2){ //"exit" command
+		char* historyCmd = historyExeCmd(historyCount, inputBuff);
+		if(historyCmd != NULL){
+			strncpy(inputBuff, historyCmd, MAX_LINE);//will copy the old history command into inputBuff
+		}
+		int pipeStatus = checkPipe(inputBuff,strPiped); //0 is no pipe, 1 has pipe
+		int commandStatus = checkCustomCmd(inputBuff); // 0 default command; 1 history; 2 exit
+	
+		if(commandStatus == 2){ //"exit" command
 			printf(" exiting\n");
 			should_run = 0;
 			exit(0);
 		}
-		if(commandNumber == 1){ //"history" command
-			int i = 0;			
+		else if(commandStatus == 1){ //"history" command
+			historyCount = addToHistory(historyCount, inputBuff);	
+			int i = 0;
 			while(i < HIST_COUNT){
 				printf("%d %s\n",(i+1),historyArray[i]);
 				i++;
 			}
 		}
-		char* tmp = convertExToCmd(historyCount, inputBuff);//calls function to see if input has !! or !N
-		if(tmp != NULL){
-			strncpy(inputBuff, tmp, MAX_LINE);//will copy the old history command into inputBuff
-		}
-		historyCount = addToHistory(historyCount, inputBuff);
-		
-	//returns an int, the value of which depends on characters in inputBuff
-		tokenCount = splitToken(inputBuff, args);
-	
-		flag = checkHasAmpAndModify((&args[tokenCount-1]));
-		
-		printf("flag: %d\n", flag);
-		pid = fork();
-		if(pid < 0){
-			printf("error occured\n");
-			exit(1);
-		}
-		else if(pid == 0){
-			printf("fork success\n");		
-			execvp(args[0], args);
-		}
-		else{
-			if(flag == 0){
-				printf("waiting child\n");			
-				wait(NULL);
-				printf("child complete\n");
+		else if(commandStatus == 0){ //command is not custom
+			if(pipeStatus == 0){ //standard command(no pipe)
+				splitToken(inputBuff, args);
+				//flag = checkHasAmpAndModify((&args[tokenCount-1]));
+				//printf("flag: %d\n", flag);
+				execArgs(args, flag, inputBuff); //standard execution
+			}
+			else if(pipeStatus == 1){ //piped command
+				splitToken(strPiped[0], args);
+				splitToken(strPiped[1], argsPiped);
+				//flag = checkHasAmpAndModify((&args[tokenCount-1]));
+				//printf("flag: %d\n", flag);
+				execArgsPiped(args, argsPiped, inputBuff); //piped execution
 			}
 		}
-	
-	
+
+		
+		
+	//returns an int, the value of which depends on characters in inputBuff
+		
 	
         /**
          * After reading user input, the steps are:
