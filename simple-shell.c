@@ -37,17 +37,16 @@ void splitToken(char* inputBuff, char** args)
 	args[i] = NULL; //last argument is NULL termination
 }
 //this function checks to see if each character in an arg is &, and if it is, returns 1
-int checkHasAmpAndModify(char **args, size_t length)
+int checkHasAmpAndModify(char *inputBuff)
 {
-	int slen;
-	slen = strlen(*args);
-	char *str = *args;
+	int slen = strlen(inputBuff);
+	char *str = inputBuff;
 	if(str[slen-1] == '&'){ //checks to see if the final value, before terminating character, is '&'
-		args[slen-1] = 0;// if it is, removes &
+		inputBuff[slen-1] = 0;// if it is, removes &
 		slen--;
 		if(slen == 0)
 		{
-			*args = NULL;
+			inputBuff = NULL;
 		}
 		return 1;//returns 1 if last character is &
 	}
@@ -141,7 +140,12 @@ void addToHistory(char *inputBuff)
 }
 
 //this function executes a custom supported command
-void execCustomCmd(char* inputBuff, int* should_run, int commandStatus){
+void execCustomCmd(char* inputBuff, int* should_run, int commandStatus, int flag){
+	if(commandStatus == 2){ //custom "exit" command
+		printf("Goodbye\n");
+		should_run = 0;
+		exit(0);
+	}
 	pid_t pid = fork();
 	if(pid < 0){
 		printf("fork error occured\n");
@@ -154,21 +158,18 @@ void execCustomCmd(char* inputBuff, int* should_run, int commandStatus){
 			if (historyCount > 10){
 				j = (historyCount - 9);
 			}else{ j = 1; }
-
-			while(i < HIST_COUNT){
+			printf("\n");
+			while(i < HIST_COUNT && i < historyCount){
 				printf("%d %s\n",(j),historyArray[i]); //print most recent 10 commands from hsitoryArray[] 
 				j++;
 				i++;
 			}
 		}
-		else if(commandStatus == 2){ //custom "exit" command
-			printf(" exiting\n");
-			should_run = 0;
-		}
-		exit(0);
-	}
 	else{	
-		wait(NULL); //child invoke wait
+		if(flag == 0){
+			wait(NULL); //child invoke wait
+		}
+	}
 	}
 }
 
@@ -210,7 +211,7 @@ int checkPipe(char* inputBuff, char** strPiped){
 }
 
 //this function executes a pipe command
-void execArgsPiped(char** args, char** argsPiped, char* inputBuff, char** strPiped) 
+void execArgsPiped(char** args, char** argsPiped, char* inputBuff, char** strPiped, int flag) 
 {
     	int pipefd[2]; //read and write  
     	pid_t pid1;
@@ -255,8 +256,10 @@ void execArgsPiped(char** args, char** argsPiped, char* inputBuff, char** strPip
         }  
 		close(pipefd[0]); //close read
 		close(pipefd[1]); //close write
-            	wait(NULL);
-            	wait(NULL); 
+		if(flag == 0){
+            		wait(NULL);
+            		wait(NULL);
+		}
     } 
 }
 
@@ -266,8 +269,8 @@ int main(void)
 	char inputBuff[MAX_LINE]; 
 	char *args[MAX_LINE/2 + 1] = {0};
 	char *argsPiped[MAX_LINE/2 + 1];
-    int should_run = 1;
-	int flag = 0;
+	int should_run = 1;
+	int flag;
 	int stringCompareInt;
 	int tokenCount; //to see how many tokens are in args array
 	char* strPiped[2];
@@ -281,33 +284,31 @@ int main(void)
         printf("osh>");
         fflush(stdout); //this allows the buffer to be flushed so you do not need a new line
 
-		fgets(inputBuff, MAX_LINE, stdin); //get user input	
+	fgets(inputBuff, MAX_LINE, stdin); //get user input	
 
-		size_t length = strlen(inputBuff);
-		if(inputBuff[length-1] == '\n'){ //replaces endline char with null terminating 0
-			inputBuff[length-1] = '\0';
+	size_t length = strlen(inputBuff);
+	if(inputBuff[length-1] == '\n'){ //replaces endline char with null terminating 0
+		inputBuff[length-1] = '\0';
+	}
+	char* historyCmd = historyExeCmd(historyCount, inputBuff); //is input a !! or !N
+	if(historyCmd != NULL){
+		strncpy(inputBuff, historyCmd, MAX_LINE); //copy the history command into inputBuff
+	}
+	addToHistory(inputBuff); //add the current inputBuff to historyArray[]
+	pipeStatus = checkPipe(inputBuff,strPiped); //0 is no pipe, 1 has pipe
+	commandStatus = checkCustomCmd(inputBuff); //0 default command; 1 history; 2 exit
+	flag = checkHasAmpAndModify(inputBuff);
+	if(commandStatus == 1 || commandStatus == 2){ //execute custom command			
+		execCustomCmd(inputBuff, &should_run, commandStatus, flag);
+	}
+	else if(commandStatus == 0){ //command is not custom
+		if(pipeStatus == 0){ //standard command(no pipe)
+			execArgs(args, flag, inputBuff); //standard execution
 		}
-		char* historyCmd = historyExeCmd(historyCount, inputBuff); //is input a !! or !N
-		if(historyCmd != NULL){
-			strncpy(inputBuff, historyCmd, MAX_LINE); //copy the history command into inputBuff
+		else if(pipeStatus == 1){ //piped command
+			execArgsPiped(args, argsPiped, inputBuff, strPiped, flag); //piped execution
 		}
-		addToHistory(inputBuff); //add the current inputBuff to historyArray[]
-		pipeStatus = checkPipe(inputBuff,strPiped); //0 is no pipe, 1 has pipe
-		commandStatus = checkCustomCmd(inputBuff); //0 default command; 1 history; 2 exit
-		if(commandStatus == 1 || commandStatus == 2){ //execute custom command			
-			execCustomCmd(inputBuff, &should_run, commandStatus);
-		}
-		else if(commandStatus == 0){ //command is not custom
-			if(pipeStatus == 0){ //standard command(no pipe)
-				//flag = checkHasAmpAndModify((&args[tokenCount-1]), length);
-				execArgs(args, flag, inputBuff); //standard execution
-			}
-			else if(pipeStatus == 1){ //piped command
-				//flag = checkHasAmpAndModify((&args[tokenCount-1]), length);
-				execArgsPiped(args, argsPiped, inputBuff, strPiped); //piped execution
-			}
-		}		
-	//returns an int, the value of which depends on characters in inputBuff
+	}		
 		
 	
         /**
@@ -322,3 +323,4 @@ int main(void)
     
 	return 0;
 }
+
